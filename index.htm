@@ -1,0 +1,197 @@
+<html>
+
+<head>
+	<title>Training 99</title>
+	<script>
+		var ga = {
+			ctx: null, audio: null, lib: {}, evts: {},
+			data: {
+				id: 0,
+				circle: 0,
+				plane: null, bulletSystem: null, drawables: null, timecounter: null,
+			},
+			keys: {
+				left: false, top: false, right: false, bottom: false,
+				space: false
+			},
+			res: {
+				imgs: { explosion: "explosion.png", plane: "plane.png" },
+				sounds: { explosion: "explosion.mp3", bullet: "bullet.mp3" },
+				loaded: 0, total: 4
+			}
+		};
+		window.addEventListener("load", function () {
+			ga.ctx = document.getElementById("cvs").getContext("2d");
+			ga.audio = new AudioContext();
+			ga.loadResources();
+		});
+		ga.loadResources = function () {
+			ga.loadImages();
+			ga.loadSounds();
+		};
+		ga.loadImages = function () {
+			// ��X���󤤪��C�Ӧ���
+			for (var name in ga.res.imgs) {
+				ga.loadImage(name, ga.res.imgs[name]);
+			}
+		};
+		ga.loadImage = function (name, src) {
+			var img = new Image();
+			img.src = src;
+			img.onload = function () {
+				// �Ϥ����J����
+				ga.res.imgs[name] = this;
+				ga.resourceLoaded();
+			};
+		};
+		ga.loadSounds = function () {
+			// ��X���󤤪��C�Ӧ���
+			for (var name in ga.res.sounds) {
+				ga.loadSound(name, ga.res.sounds[name]);
+			}
+		};
+		ga.loadSound = function (name, src) {
+			var req = new XMLHttpRequest();
+			req.open("get", src);
+			req.responseType = "arraybuffer";
+			req.onload = function () {
+				// �N�ɮת���ƸѽX�� AudioBuffer ����
+				ga.audio.decodeAudioData(this.response, function (buffer) {
+					ga.res.sounds[name] = buffer;
+					ga.resourceLoaded();
+				});
+			};
+			req.send();
+		};
+		ga.resourceLoaded = function () {
+			ga.res.loaded++;
+			var progress = 100 * ga.res.loaded / ga.res.total;
+			document.getElementById("loader").innerHTML = progress + "%";
+			if (ga.res.loaded >= ga.res.total) {
+				ga.initMain();
+			}
+		};
+		ga.playSound = function (buffer) {
+			var source = ga.audio.createBufferSource();
+			source.buffer = buffer;
+			source.connect(ga.audio.destination);
+			source.start();
+		};
+		// �}�ҥD���
+		ga.initMain = function () {
+			// �B�z HTML DOM
+			document.getElementById("loader").style.display = "none";
+			document.getElementById("main").style.display = "block";
+			document.getElementById("game").style.display = "none";
+		};
+		ga.initGame = function () {
+			// 處理 HTML DOM
+			document.getElementById("main").style.display = "none";
+			document.getElementById("game").style.display = "block";
+			// 初始化遊戲環境
+			document.addEventListener("keydown", ga.evts.keydown);
+			document.addEventListener("keyup", ga.evts.keyup);
+			// 初始化遊戲資料
+			ga.data.circle = 0;
+			ga.data.plane = new ga.lib.Plane();
+			ga.data.bulletSystem = new ga.lib.BulletSystem();
+			ga.data.drawables = [];
+			ga.data.drawables.push(ga.data.plane);
+			ga.data.drawables.push(ga.data.bulletSystem);
+			// 正式啟動遊戲
+			ga.data.id = window.setInterval(ga.refreshGame, 20);
+		};
+		ga.evts.keyup = function (e) {
+			var code = e.keyCode;
+			if (code == 37) { // 左
+				ga.keys.left = false;
+			} else if (code == 38) { // 上
+				ga.keys.top = false;
+			} else if (code == 39) { // 右
+				ga.keys.right = false;
+			} else if (code == 40) { // 下
+				ga.keys.bottom = false;
+			} else if (code == 32) { // 空白
+				ga.keys.space = false;
+			}
+		};
+		ga.evts.keydown = function (e) {
+			var code = e.keyCode;
+			if (code == 37) { //左
+				ga.keys.left = true;
+			} else if (code == 38) { // 上
+				ga.keys.top = true;
+			} else if (code == 39) { // 右
+				ga.keys.right = true;
+			} else if (code == 40) { // 下
+				ga.keys.bottom = true;
+			} else if (code == 32) { // 空白
+				ga.keys.space = true;
+			}
+		};
+		ga.refreshGame = function () {
+			// 更新資料
+			var drawables = ga.data.drawables;
+			for (var i = 0; i < drawables.length; i++) {
+				if (drawables[i].update()) { // �p�G�����A�M��
+					drawables.splice(i, 1);
+					i--
+				}
+			}
+			// ��s�e��
+			ga.ctx.fillRect(0, 0, ga.ctx.canvas.width, ga.ctx.canvas.height);
+			for (var i = 0; i < drawables.length; i++) {
+				drawables[i].draw();
+			}
+			// �^�X�� +1
+			ga.data.circle++;
+			// �I������
+			var result = ga.checkExplosion();
+			if (result) {
+				ga.gameOver();
+			}
+		};
+
+		//碰撞偵測
+		ga.checkExplosion = function () {
+			var bullets = ga.data.bulletSystem.bullets;
+			var plane = ga.data.plane;
+			var explosion = false;
+			var threshold = bullets[0].size + (plane.size / 2);
+			for (var i = 0; i < bullets.length; i++) {
+				var distance = Math.sqrt(//距離公式
+					Math.pow(bullets[i].x - plane.x, 2) +
+					Math.pow(bullets[i].y - plane.y, 2)
+				);
+				if (distance < threshold) {
+					explosion = true;
+					break;
+				}
+			}
+			return explosion;
+		};
+		ga.gameOver = function () {
+			// 撥放爆炸音效
+			ga.playSound(ga.res.sounds.explosion);
+			// 放上爆炸圖片
+			ga.ctx.drawImage(ga.res.imgs.explosion,
+				ga.data.plane.x - 20, ga.data.plane.y - 20,
+				40, 40);
+			// 排程停止, 遊戲畫面停住
+			window.clearInterval(ga.data.id);
+		};
+	</script>
+	<script src="lib.js"></script>
+</head>
+
+<body>
+	<div id="loader"></div>
+	<div id="main" style="display:none">
+		<button onclick="ga.initGame();">Start</button>
+	</div>
+	<div id="game" style="display:none">
+		<canvas id="cvs" width="600" height="450"></canvas>
+	</div>
+</body>
+
+</html>
